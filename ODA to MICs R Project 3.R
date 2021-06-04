@@ -19,7 +19,7 @@ list.of.packages <-
   c( "tidyverse", "ggpubr", "ggrepel", "extrafont", "wbstats",
      "ggplot2", "data.table", "dplyr", "countrycode",
      "ggthemes", "rio", "RCurl", "foreign", "readxl", "XML",
-     "dplyr", "forcats", "ggridges", "povcalnetR", "scales")
+     "dplyr", "forcats", "ggridges", "povcalnetR", "scales", "fst")
 new.packages <-
   list.of.packages[!(list.of.packages %in% installed.packages()[, "Package"])]
 if (length(new.packages))
@@ -60,20 +60,28 @@ name2region <- function(x) {countrycode(x,"country.name","un.region.name")}
 # a function used for inserting line breaks into strings:
 con <- function(string_) {cat(strwrap(string_, 60),sep="\n")}
 
-# Load CRS Data---------------------------------------------------
-dac <- list()
 
-for (i_ in dir()) {
-  toget <- paste0(crs_data_dir, "/", i_, "/", i_, ".txt")
-  dac[[as.character(i_)]] <- fread(
-    toget,
-    sep = "|",
-    header = T,
-    quote = "",
-  )
+# Options -----------------------------------------------------------------
+
+use_fst <- TRUE
+
+# Load CRS Data---------------------------------------------------
+if (use_fst) {
+  dac <- read.fst(dac.fst) %>% as.data.table()
+} else {
+  dac <- list()
+  for (i_ in dir()) {
+    toget <- paste0(crs_data_dir, "/", i_, "/", i_, ".txt")
+    dac[[as.character(i_)]] <- fread(toget,
+                                     sep = "|",
+                                     header = T,
+                                     quote = "",
+    )
+  }
+  dac <- rbindlist(dac, idcol = TRUE)
+  setwd(input_dir)
+  fst::write.fst(dac, "dac.fst")
 }
-  
-dac <- rbindlist(dac,idcol = TRUE)
 
 # Clean names ----------------------------------------------------
 names(dac) <-  sub("\"", "", names(dac))
