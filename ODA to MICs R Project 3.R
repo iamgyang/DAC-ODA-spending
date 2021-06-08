@@ -508,6 +508,23 @@ waitifnot(
   ) < 0.1
 )
 
+
+# New variable of OTHER countries' spending -------------------------------
+
+# get a sum of TOTAL USD commitment and grant equivalent spending for each 
+# recipient country
+exp_grid[, tot_grantequiv := sum(usd_grantequiv, na.rm = T), by = iso3c]
+exp_grid[, tot_commitment := sum(usd_commitment, na.rm = T), by = iso3c]
+
+# subtract that sum from the donor-specific commitment or grant equivalent 
+# spending to get any OTHER spending by other donors
+exp_grid[, other_donor_grantequiv:= tot_grantequiv - usd_grantequiv]
+exp_grid[, other_donor_commitment:= tot_commitment - usd_commitment]
+
+# create a variable that is the total commitment / grant equivalent divided by GDP:
+exp_grid[, other_donor_grantequiv := other_donor_grantequiv / GDP]
+exp_grid[, other_donor_commitment := other_donor_commitment / GDP]
+
 # EXPORT ------------------------------------------------------------------
 exp_grid %>% foreign::write.dta(., "dac.dta")
 

@@ -14,8 +14,8 @@ foreach user in "`c(username)'" {
 
 *** name of output regression files:
 
-global regout1 "$input/total_regressions59.xls"
-global regout2 "$input/pov_regressions59.xls"
+global regout1 "$input/total_regressions60.xls"
+global regout2 "$input/pov_regressions60.xls"
 
 clear all
 pause off
@@ -82,9 +82,13 @@ set more off
 
 foreach Y_outcome of local outcome_vars_local {
 	di "`Y_outcome'"
+	if "`Y_outcome'" == "usd_grantequiv" {
+		loc other_donor_funding other_donor_grantequiv
+	}
+	if "`Y_outcome'" == "usd_commitment" {
+		loc other_donor_funding other_donor_commitment
+	}
 	
-	
-
 	foreach regr of local regressions_toloop {
 		
 		di "`regr'"
@@ -99,7 +103,7 @@ foreach Y_outcome of local outcome_vars_local {
 				*** if we're missing poverty level for 2019, then we get it from 
 				*** a prior year)
 					
-					local varlist usd_commitment usd_grantequiv gdppc GDP Population refugeepop_orig refugeepop_dest wgi pov1_9 pov3_8 distcap colony exports
+					local varlist usd_commitment usd_grantequiv gdppc GDP Population refugeepop_orig refugeepop_dest wgi pov1_9 pov3_8 distcap colony exports 
 					foreach var of local varlist {
 						sort iso3c iso3c_d year
 						bysort iso3c iso3c_d: carryforward `var', gen(`var'n)
@@ -123,7 +127,7 @@ foreach Y_outcome of local outcome_vars_local {
 
 		*** For 2014-19 regressions, we want to get the MEAN of each of these 
 		*** variables across 2014-2019:
-			collapse (`collapse_type') `Y_outcome' GDP Pop refugeepop_orig refugeepop_dest total exports wgi pov1_9 pov3_8 (max) distcap colony, by (iso3c_d iso3c)
+			collapse (`collapse_type') `Y_outcome' `other_donor_funding' GDP Pop refugeepop_orig other_donor_grantequiv refugeepop_dest total exports wgi pov1_9 pov3_8 (max) distcap colony, by (iso3c_d iso3c)
 			
 
 		*** Modify the outcome variables to delete zeros or become categorical 
@@ -176,7 +180,7 @@ foreach Y_outcome of local outcome_vars_local {
 				replace `var' = `var'/(10^6)
 			}
 		
-		*** for graphing (late on), we will need to know what the outcome variable label is
+		*** for graphing (later on), we will need to know what the outcome variable label is
 		
 			local outcome_variable_label: variable label `Y_outcome'
 		
@@ -242,7 +246,6 @@ foreach Y_outcome of local outcome_vars_local {
 						inlist(iso3c_d, "KOR", "NLD", "NOR", "USA", "GBR"))
 					}
 					tab iso3c_d
-				
 				
 				/* For each donor, get the total ODA (to any country), which we'll 
 				divide individual donor-country pairs to get a proportion for the 
@@ -401,7 +404,7 @@ foreach Y_outcome of local outcome_vars_local {
 						
 						if (!strpos("`i'", "DAC")) {
 							qui:`regression_type' `Y_outcome' GDP Pop refugeepop_dest ///
-							refugeepop_orig total wgi distcap i.colony exports `regression_options'
+							refugeepop_orig total wgi distcap i.colony exports `other_donor_funding' `regression_options'
 								qui: fitstat
 								loc full_r2 = ``r2_measure''
 								loc full_N  = `e(N)'
@@ -446,12 +449,12 @@ foreach Y_outcome of local outcome_vars_local {
 			
 			
 
-	*** Do the same thing for the three poverty regressions (using GDP vs. the two
-	*** poverty headcount measures), except here, we do not care about deleting all
-	*** observations that are missing any  variable: (previously, with the stepwise
-	*** regressions, we wanted to make sure that the set of country-donors remains
-	*** the SAME for  each regression that we carry out.). Output these regressions 
-    *** as tables.
+	/*  Do the same thing for the three poverty regressions (using GDP vs. the two
+		poverty headcount measures), except here, we do not care about deleting all
+		observations that are missing any  variable: (previously, with the stepwise
+		regressions, we wanted to make sure that the set of country-donors remains
+		the SAME for  each regression that we carry out.). Output these regressions 
+		as tables. */
 
 		foreach i of local countries_toloop{
 			use "$input/cleaned_`regr'_`Y_outcome'_`i'.dta", clear
@@ -466,29 +469,27 @@ foreach Y_outcome of local outcome_vars_local {
 					local bilateral_vars ""
 					local extra_vars_nonDAC ""
 				}
-			
-			
+				
+				
 				#delimit ;
 					`regression_type' `Y_outcome' 
-						GDP Pop refugeepop_orig refugeepop_dest total wgi 
+						GDP Pop refugeepop_orig refugeepop_dest total wgi `other_donor_funding' 
 						`extra_vars_nonDAC' `regression_options';
 						outreg2 using "$regout1", append ctitle("`i'_`regr'_`Y_outcome'") 
 						label dec(7);
 					
 					`regression_type' `Y_outcome' 
-						pov1_9 refugeepop_orig refugeepop_dest total 
+						pov1_9 refugeepop_orig refugeepop_dest total `other_donor_funding' 
 						wgi `extra_vars_nonDAC' `regression_options';
 						outreg2 using "$regout2", append ctitle("`i'_`regr'_`Y_outcome'") 
 						label dec(7);
 					
 					`regression_type' `Y_outcome' 
-						pov3_8 refugeepop_orig refugeepop_dest total 
+						pov3_8 refugeepop_orig refugeepop_dest total `other_donor_funding' 
 						wgi `extra_vars_nonDAC' `regression_options';
 						outreg2 using "$regout2", append ctitle("`i'_`regr'_`Y_outcome'")
 						label dec(7);
 				#delimit cr
-				
-				
 		}
 		
 	*** save the R squared values from my stepwise regressions into an 
