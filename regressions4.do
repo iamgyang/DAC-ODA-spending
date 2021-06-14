@@ -14,11 +14,11 @@ foreach user in "`c(username)'" {
 
 *** name of output regression files:
 
-global regout1 "$input/total_regressions60.xls"
-global regout2 "$input/pov_regressions60.xls"
+global regout1 "$input/total_regressions66.xls"
+global regout2 "$input/pov_regressions66.xls"
 
 clear all
-pause off
+pause on
 set more off
 
 *** ============ Packages ============
@@ -82,13 +82,7 @@ set more off
 
 foreach Y_outcome of local outcome_vars_local {
 	di "`Y_outcome'"
-	if "`Y_outcome'" == "usd_grantequiv" {
-		loc other_donor_funding other_donor_grantequiv
-	}
-	if "`Y_outcome'" == "usd_commitment" {
-		loc other_donor_funding other_donor_commitment
-	}
-	
+		
 	foreach regr of local regressions_toloop {
 		
 		di "`regr'"
@@ -99,11 +93,14 @@ foreach Y_outcome of local outcome_vars_local {
 		*** Initial Data cleaning
 			
 			if strpos("`regr'", "2019"){
-				*** carryforward / fill downwards these variables: (ensures that 
-				*** if we're missing poverty level for 2019, then we get it from 
-				*** a prior year)
+					/* carryforward / fill downwards these variables: (ensures that 
+					if we're missing poverty level for 2019, then we get it from 
+					a prior year) */
 					
-					local varlist usd_commitment usd_grantequiv gdppc GDP Population refugeepop_orig refugeepop_dest wgi pov1_9 pov3_8 distcap colony exports 
+					local varlist usd_commitment usd_grantequiv gdppc GDP ///
+					Population refugeepop_orig refugeepop_dest wgi pov1_9 ///
+					pov3_8 distcap colony exports 
+					
 					foreach var of local varlist {
 						sort iso3c iso3c_d year
 						bysort iso3c iso3c_d: carryforward `var', gen(`var'n)
@@ -112,24 +109,17 @@ foreach Y_outcome of local outcome_vars_local {
 						}
 					
 					keep if year==2019
-					
-				*** we define a macro "collapse_type" because we want to make the 
-				*** code generalizable to any time frame and any type of regression. 
-				*** So, if the year is only 2019, it doesn't really matter if we 
-				*** take a sum or a mean
-					
-					local collapse_type sum
+// 				pause 1 
 			}
-			
-			else if strpos("`regr'", "2014"){
-				local collapse_type mean
-			}
-
 		*** For 2014-19 regressions, we want to get the MEAN of each of these 
 		*** variables across 2014-2019:
-			collapse (`collapse_type') `Y_outcome' `other_donor_funding' GDP Pop refugeepop_orig other_donor_grantequiv refugeepop_dest total exports wgi pov1_9 pov3_8 (max) distcap colony, by (iso3c_d iso3c)
 			
-
+			else if strpos("`regr'", "2014"){
+				collapse (mean) `Y_outcome'  GDP Pop refugeepop_orig ///
+				other_donor_grantequiv refugeepop_dest total exports wgi ///
+				pov1_9 pov3_8 (max) distcap colony, by (iso3c_d iso3c)
+			}
+			
 		*** Modify the outcome variables to delete zeros or become categorical 
 		*** with logistic regression.
 		
@@ -350,6 +340,13 @@ foreach Y_outcome of local outcome_vars_local {
 						restore
 					}
 				
+				pause 3
+				/* Merge with income levels and DELETE HICs from recipient 
+				countries */
+				mmerge iso3c using "$input/income_groups.dta"
+				keep if _m==3
+				drop if income == "High income"
+				
 				save "$input/cleaned_`regr'_`Y_outcome'_`i'.dta", replace
 		}
 	
@@ -371,7 +368,7 @@ foreach Y_outcome of local outcome_vars_local {
 					}
 				
 				di "`bilateral_vars'"
-
+// 				pause 2 
 				*** drop missing variables na.omit
 					foreach x of varlist `Y_outcome' GDP Pop refugeepop_dest ///
 					refugeepop_orig total wgi `bilateral_vars' {
@@ -404,7 +401,7 @@ foreach Y_outcome of local outcome_vars_local {
 						
 						if (!strpos("`i'", "DAC")) {
 							qui:`regression_type' `Y_outcome' GDP Pop refugeepop_dest ///
-							refugeepop_orig total wgi distcap i.colony exports `other_donor_funding' `regression_options'
+							refugeepop_orig total wgi distcap i.colony exports  `regression_options'
 								qui: fitstat
 								loc full_r2 = ``r2_measure''
 								loc full_N  = `e(N)'
@@ -473,19 +470,19 @@ foreach Y_outcome of local outcome_vars_local {
 				
 				#delimit ;
 					`regression_type' `Y_outcome' 
-						GDP Pop refugeepop_orig refugeepop_dest total wgi `other_donor_funding' 
+						GDP Pop refugeepop_orig refugeepop_dest total wgi  
 						`extra_vars_nonDAC' `regression_options';
 						outreg2 using "$regout1", append ctitle("`i'_`regr'_`Y_outcome'") 
 						label dec(7);
 					
 					`regression_type' `Y_outcome' 
-						pov1_9 refugeepop_orig refugeepop_dest total `other_donor_funding' 
+						pov1_9 refugeepop_orig refugeepop_dest total  
 						wgi `extra_vars_nonDAC' `regression_options';
 						outreg2 using "$regout2", append ctitle("`i'_`regr'_`Y_outcome'") 
 						label dec(7);
 					
 					`regression_type' `Y_outcome' 
-						pov3_8 refugeepop_orig refugeepop_dest total `other_donor_funding' 
+						pov3_8 refugeepop_orig refugeepop_dest total  
 						wgi `extra_vars_nonDAC' `regression_options';
 						outreg2 using "$regout2", append ctitle("`i'_`regr'_`Y_outcome'")
 						label dec(7);
