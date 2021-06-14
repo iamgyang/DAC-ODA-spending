@@ -17,8 +17,8 @@ foreach user in "`c(username)'" {
 }
 
 *** name of output regression files:
-	global regout1 "$input/total_regressions63.xls"
-	global regout2 "$input/pov_regressions63.xls"
+	global regout1 "$input/total_regressions68.xls"
+	global regout2 "$input/pov_regressions68.xls"
 
 local Y_outcome usd_commitment
 
@@ -67,12 +67,23 @@ take a sum or a mean */
 	}
 	
 /* For each donor-country pair, get the total amount of non-donor ODA 
-to that country: */
+to that country divided by GDP: */
 	bysort iso3c: egen totoda_recip = total(usd_commitment)
 	gen other_oda = totoda_recip - usd_commitment
 	gen other_oda_div_gdp = other_oda / GDP * (10^6)
 	label variable other_oda_div_gdp "total ODA from other donors besides donor country per 1m GDP"
 	
+/* For each donor-country pair, get the total amount received by non-donor 
+countries divided by ODA from donor countries: */
+	*** get the total ODA OVERALL
+		egen totoda = total(usd_commitment)
+		bysort iso3c: egen donor_oda = total(usd_commitment)
+		gen totoda_less_donor = totoda - donor_oda
+	*** Now, this gives us the Share of the country in the other donors' ODA contributions
+		gen other_oda_div_totoda_less_donor = other_oda / totoda_less_donor
+		label variable other_oda_div_totoda_less_donor ///
+		"Share of the country in the other donors' ODA contributions"
+		
 *** Generate per capita variables; relabel as per capita.
 	foreach var of varlist refugeepop_orig refugeepop_dest GDP {
 		replace `var' = `var'/ Pop
@@ -85,14 +96,13 @@ to that country: */
 divide individual donor-country pairs to get a proportion for the 
 non-logistic regressions. */
 	bysort iso3c_d: egen totoda_donor = total(usd_commitment)
-	egen totoda = total(usd_commitment)
-	replace usd_commitment = usd_commitment / totoda
+	replace usd_commitment = usd_commitment / totoda_donor
 
 /* make sure that the proportion is actually a proportion 
 (i.e. less than 1) */
 	preserve
 	assert usd_commitment<1
-	collapse (sum) usd_commitment
+	collapse (sum) usd_commitment, by(iso3c_d)
 	assert abs(usd_commitment-1)<=0.02
 	restore
 
@@ -122,9 +132,15 @@ local extra_vars_nonDAC "i.colony exports distcap"
 
 /* for our regression, omit the countries where we do not have data */
 	foreach x of varlist usd_commitment GDP Population refugeepop_dest ///
-		refugeepop_orig total wgi `bilateral_vars' other_oda_div_gdp {
+		refugeepop_orig total wgi `bilateral_vars' other_oda_div_gdp ///
+		other_oda_div_totoda_less_donor{
 		drop if (`x' == .)
 	}
+
+/* drop HICs */
+	mmerge iso3c using "$input/income_groups.dta"
+	keep if _m==3
+	drop if income == "High income"
 	
 	save "$input/overall_regression_input.dta", replace
 
@@ -152,7 +168,7 @@ foreach donor_c of local countries_toloop {
 	use "$input/overall_regression_input.dta", clear
 	keep if iso3c_d == "`donor_c'"
 	qui: regress usd_commitment GDP Pop refugeepop_dest refugeepop_orig total wgi ///
-	other_oda_div_gdp `extra_vars_nonDAC', robust
+	other_oda_div_gdp `extra_vars_nonDAC' other_oda_div_totoda_less_donor, robust
 	outreg2 using "$regout1", append ctitle("`donor_c'") label dec(7)
 }
 
