@@ -308,7 +308,7 @@ foreach Y_outcome of local outcome_vars_local {
 						}
 						
 						*** IF we are in a DAC regression, then add a local
-						*** to say that we SHOULD log distcap
+						*** to say that we SHOULD NOT log distcap
 						
 							local tolog_non_DAC ""
 						
