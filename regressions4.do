@@ -14,11 +14,11 @@ foreach user in "`c(username)'" {
 
 *** name of output regression files:
 
-global regout1 "$input/total_regressions66.xls"
-global regout2 "$input/pov_regressions66.xls"
+global regout1 "$input/total_regressions72.xls"
+global regout2 "$input/pov_regressions72.xls"
 
 clear all
-pause on
+pause off
 set more off
 
 *** ============ Packages ============
@@ -473,19 +473,19 @@ foreach Y_outcome of local outcome_vars_local {
 						GDP Pop refugeepop_orig refugeepop_dest total wgi  
 						`extra_vars_nonDAC' `regression_options';
 						outreg2 using "$regout1", append ctitle("`i'_`regr'_`Y_outcome'") 
-						label dec(7);
+						label dec(4);
 					
 					`regression_type' `Y_outcome' 
 						pov1_9 refugeepop_orig refugeepop_dest total  
 						wgi `extra_vars_nonDAC' `regression_options';
 						outreg2 using "$regout2", append ctitle("`i'_`regr'_`Y_outcome'") 
-						label dec(7);
+						label dec(4);
 					
 					`regression_type' `Y_outcome' 
 						pov3_8 refugeepop_orig refugeepop_dest total  
 						wgi `extra_vars_nonDAC' `regression_options';
 						outreg2 using "$regout2", append ctitle("`i'_`regr'_`Y_outcome'")
-						label dec(7);
+						label dec(4);
 				#delimit cr
 		}
 		

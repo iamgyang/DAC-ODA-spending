@@ -2,7 +2,7 @@
 
 *** clear workspaces
 	clear all
-	pause off
+	pause on
 	set more off
 	cls
 
@@ -17,10 +17,10 @@ foreach user in "`c(username)'" {
 }
 
 *** name of output regression files:
-	global regout1 "$input/total_regressions68.xls"
-	global regout2 "$input/pov_regressions68.xls"
+	global regout1 "$input/total_regressions77.xls"
+	global regout2 "$input/pov_regressions77.xls"
 
-local Y_outcome usd_commitment
+local Y_outcome usd_grantequiv
 
 use "$input\dac.dta", clear
 
@@ -47,7 +47,7 @@ take a sum or a mean */
 
 // local collapse_type sum
 //
-// collapse (`collapse_type') usd_commitment GDP Pop refugeepop_orig refugeepop_dest total exports wgi pov1_9 pov3_8 (max) distcap colony, by (iso3c_d iso3c)
+// collapse (`collapse_type') usd_grantequiv GDP Pop refugeepop_orig refugeepop_dest total exports wgi pov1_9 pov3_8 (max) distcap colony, by (iso3c_d iso3c)
 
 *** Label variables
 	label variable colony "Bilat. Colony Dummy"
@@ -62,24 +62,26 @@ take a sum or a mean */
 	label variable pov1_9 "Poverty headcount under $1.90"
 	label variable pov3_8 "Poverty headcount under $3.80"
 
-	if "usd_commitment" == "usd_commitment" {
-		label variable usd_commitment "Commitments (% of total ODA)"
+	if "usd_grantequiv" == "usd_grantequiv" {
+		label variable usd_grantequiv "Grant Equivalents (% of total ODA)"
 	}
 	
 /* For each donor-country pair, get the total amount of non-donor ODA 
 to that country divided by GDP: */
-	bysort iso3c: egen totoda_recip = total(usd_commitment)
-	gen other_oda = totoda_recip - usd_commitment
+	bysort iso3c: egen totoda_recip = total(usd_grantequiv)
+	gen other_oda = totoda_recip - usd_grantequiv
 	gen other_oda_div_gdp = other_oda / GDP * (10^6)
 	label variable other_oda_div_gdp "total ODA from other donors besides donor country per 1m GDP"
 	
 /* For each donor-country pair, get the total amount received by non-donor 
 countries divided by ODA from donor countries: */
-	*** get the total ODA OVERALL
-		egen totoda = total(usd_commitment)
-		bysort iso3c: egen donor_oda = total(usd_commitment)
+	*** Get the total ODA OVERALL
+		egen totoda = total(usd_grantequiv)
+	*** Total ODA given BY this recipient country:
+		bysort iso3c_d: egen donor_oda = total(usd_grantequiv)
+	*** Total pie of ODA (less the ODA from this recipient country):
 		gen totoda_less_donor = totoda - donor_oda
-	*** Now, this gives us the Share of the country in the other donors' ODA contributions
+	*** Now, this gives us the share of the country in the other donors' ODA contributions
 		gen other_oda_div_totoda_less_donor = other_oda / totoda_less_donor
 		label variable other_oda_div_totoda_less_donor ///
 		"Share of the country in the other donors' ODA contributions"
@@ -95,22 +97,22 @@ countries divided by ODA from donor countries: */
 /* For each donor, get the total ODA (to any country), which we'll 
 divide individual donor-country pairs to get a proportion for the 
 non-logistic regressions. */
-	bysort iso3c_d: egen totoda_donor = total(usd_commitment)
-	replace usd_commitment = usd_commitment / totoda_donor
+	bysort iso3c_d: egen totoda_donor = total(usd_grantequiv)
+	replace usd_grantequiv = usd_grantequiv / totoda_donor
 
 /* make sure that the proportion is actually a proportion 
 (i.e. less than 1) */
 	preserve
-	assert usd_commitment<1
-	collapse (sum) usd_commitment, by(iso3c_d)
-	assert abs(usd_commitment-1)<=0.02
+	assert usd_grantequiv<1
+	collapse (sum) usd_grantequiv, by(iso3c_d)
+	assert abs(usd_grantequiv-1)<=0.02
 	restore
-
+	
 *** take a log of distance
 	local tolog_non_DAC "distcap"
 	
 /* Create logged variables. Relabel these variables to indicate that 
-they've been logged. I added usd_commitment to loop if for logged 
+they've been logged. I added usd_grantequiv to loop if for logged 
 outcome variable. */
 	foreach var of varlist Population GDP `tolog_non_DAC' { //`addtl_to_log'
 		replace `var' = ln(`var')
@@ -131,7 +133,7 @@ local extra_vars_nonDAC "i.colony exports distcap"
 	restore	
 
 /* for our regression, omit the countries where we do not have data */
-	foreach x of varlist usd_commitment GDP Population refugeepop_dest ///
+	foreach x of varlist usd_grantequiv GDP Population refugeepop_dest ///
 		refugeepop_orig total wgi `bilateral_vars' other_oda_div_gdp ///
 		other_oda_div_totoda_less_donor{
 		drop if (`x' == .)
@@ -167,9 +169,12 @@ clear
 foreach donor_c of local countries_toloop {
 	use "$input/overall_regression_input.dta", clear
 	keep if iso3c_d == "`donor_c'"
-	qui: regress usd_commitment GDP Pop refugeepop_dest refugeepop_orig total wgi ///
-	other_oda_div_gdp `extra_vars_nonDAC' other_oda_div_totoda_less_donor, robust
-	outreg2 using "$regout1", append ctitle("`donor_c'") label dec(7)
+	qui: regress usd_grantequiv GDP Pop refugeepop_dest refugeepop_orig total wgi ///
+	other_oda_div_gdp `extra_vars_nonDAC', robust
+	outreg2 using "$regout1", append ctitle("`donor_c'") label dec(4)
+	qui: regress usd_grantequiv GDP Pop refugeepop_dest refugeepop_orig total wgi ///
+	other_oda_div_totoda_less_donor `extra_vars_nonDAC', robust
+	outreg2 using "$regout1", append ctitle("`donor_c'") label dec(4)
 }
 
 
