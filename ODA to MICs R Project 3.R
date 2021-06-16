@@ -67,7 +67,8 @@ use_fst <- TRUE
 
 # Load CRS Data---------------------------------------------------
 if (use_fst) {
-  dac <- read.fst(dac.fst) %>% as.data.table()
+  setwd(input_dir)
+  dac <- read.fst("dac.fst") %>% as.data.table()
 } else {
   dac <- list()
   for (i_ in dir()) {
@@ -509,56 +510,54 @@ waitifnot(
 )
 
 
-# New variable of OTHER countries' spending -------------------------------
-
-# get a sum of TOTAL USD commitment and grant equivalent spending for each 
-# recipient country
-exp_grid[, tot_grantequiv := sum(usd_grantequiv, na.rm = T), by = iso3c]
-exp_grid[, tot_commitment := sum(usd_commitment, na.rm = T), by = iso3c]
-
-# subtract that sum from the donor-specific commitment or grant equivalent 
-# spending to get any OTHER spending by other donors
-exp_grid[, other_donor_grantequiv:= tot_grantequiv - usd_grantequiv]
-exp_grid[, other_donor_commitment:= tot_commitment - usd_commitment]
-
-# create a variable that is the total commitment / grant equivalent divided by GDP:
-exp_grid[, other_donor_grantequiv := other_donor_grantequiv / GDP]
-exp_grid[, other_donor_commitment := other_donor_commitment / GDP]
-
 # EXPORT ------------------------------------------------------------------
 exp_grid %>% foreign::write.dta(., "dac.dta")
 
 # GGridges for DAC ODA ----------------------------------------------------
 
-bob <- dac %>%
-  filter(donorname %in% c("Australia", "Canada","France","Germany","Japan","Korea","Netherlands","Norway","United Kingdom","United States")) %>% 
+bob <- exp_grid %>%
+  as.data.frame() %>% 
+  filter(year==2019) %>% 
+  filter(iso3c_d %in% 
+           name2code(c(
+             "Australia",
+             "Canada",
+             "France",
+             "Germany",
+             "Japan",
+             "Korea",
+             "Netherlands",
+             "Norway",
+             "United Kingdom",
+             "United States"
+           ))) %>% 
   as.data.table()
-bob <- bob[,.(donorname, recipientname, usd_grantequiv, GDP, Population, refugeepop.dest)]
+bob <- bob[,.(iso3c, iso3c_d, usd_grantequiv, GDP, Population, refugeepop.dest)]
 bob[,gdppc:=GDP/Population]
-bob[,totcom:=sum(usd_grantequiv,na.rm=TRUE),by=donorname]
+bob[,totcom:=sum(usd_grantequiv,na.rm=TRUE),by=iso3c_d]
 bob[,usd_grantequiv:=usd_grantequiv/totcom]
 bob <- bob[usd_grantequiv>0,]
 bob[,comit:=usd_grantequiv]
 invisible(lapply(names(bob),function(.name) set(bob, which(is.infinite(bob[[.name]])), j = .name,value =NA)))
 bob <- na.omit(bob)
 bob[,temp:=comit*gdppc]
+bob[,donorname:=code2name(iso3c_d)]
 bob[donorname=="United Kingdom", donorname:="UK"]
 bob[donorname=="United States", donorname:="US"]
 ordered <- as.vector(unlist(bob[,.(sum(temp)), by = donorname][order(V1)][,.(donorname)]))
 bob$donorname <- factor(bob$donorname, levels = ordered)
 
 plot1 <- ggplot(bob, aes(gdppc, weight = comit)) + 
-  geom_histogram(bins=40, fill = "aquamarine4", color = "white") + 
+  geom_histogram(bins=40, fill = "#00677F", color = "white") + 
   # theme_clean() +
   theme(legend.background = element_blank())+
   theme(plot.background = element_rect(color = "white"))+
   labs(
     x = "Recipient Country Per Capita GDP (2019 Current USD)",
-    y = "Donor",
-    title = "Where does DAC Official Development Assistance go?",
-    caption = "Source: OECD Common Reporting Standard (CRS). All figures are grant equivalent spending."
+    y = "Donor"# ,
+    # title = "Where does DAC Official Development Assistance go?",
+    # caption = "Source: OECD Common Reporting Standard (CRS). All figures are grant equivalent spending."
   ) + 
-  scale_fill_colorblind()+
   scale_x_continuous(labels = scales::dollar_format(), breaks = seq(0,14000,2000),
                      limits = c(0,14000)) + 
   theme(
@@ -572,27 +571,26 @@ plot1 <- ggplot(bob, aes(gdppc, weight = comit)) +
   )+
   facet_grid(donorname~., switch="both")
 
-
-ggsave("ridges_histogram.png", plot1, dpi=1000, width = 8, height = 10)
+ggsave("ridges_histogram.pdf", plot1, width = 5, height = 10)
 
 # Creating graph of final results from rotated table:--------------
 
 # List our of all the regressions
 files_rs <- c(
-"r_squared_2019 Logistic_usd_commitment.xlsx",
-"r_squared_2019 Logistic_usd_grantequiv.xlsx",
-"r_squared_2019 OLS ln_usd_commitment.xlsx",
-"r_squared_2019 OLS ln_usd_grantequiv.xlsx",
-"r_squared_2019 OLS positive_usd_commitment.xlsx",
-"r_squared_2019 OLS positive_usd_grantequiv.xlsx",
-"r_squared_2019 OLS_usd_commitment.xlsx",
-"r_squared_2019 OLS_usd_grantequiv.xlsx",
-"r_squared_2019 Poisson positive_usd_commitment.xlsx",
-"r_squared_2019 Poisson positive_usd_grantequiv.xlsx",
-"r_squared_2014-19 OLS ln_usd_commitment.xlsx",
-"r_squared_2014-19 OLS ln_usd_grantequiv.xlsx",
-"r_squared_2014-19 OLS_usd_commitment.xlsx",
-"r_squared_2014-19 OLS_usd_grantequiv.xlsx"
+    "r_squared_2019 Logistic_usd_commitment.xlsx",
+    "r_squared_2019 Logistic_usd_grantequiv.xlsx",
+    "r_squared_2019 OLS ln_usd_commitment.xlsx",
+    "r_squared_2019 OLS ln_usd_grantequiv.xlsx",
+    "r_squared_2019 OLS positive_usd_commitment.xlsx",
+    "r_squared_2019 OLS positive_usd_grantequiv.xlsx",
+    "r_squared_2019 OLS_usd_commitment.xlsx",
+    "r_squared_2019 OLS_usd_grantequiv.xlsx",
+    "r_squared_2019 Poisson positive_usd_commitment.xlsx",
+    "r_squared_2019 Poisson positive_usd_grantequiv.xlsx",
+    "r_squared_2014-19 OLS ln_usd_commitment.xlsx",
+    "r_squared_2014-19 OLS ln_usd_grantequiv.xlsx",
+    "r_squared_2014-19 OLS_usd_commitment.xlsx",
+    "r_squared_2014-19 OLS_usd_grantequiv.xlsx"
 )
 
 # read these into a list
@@ -759,15 +757,15 @@ plot_nice <- ggplot() +
   duh_points_and_deh_wiscers("GDP per capita, Population, Refugee In/Outflows", 0.08) +
   labs(
     x = "",
-    y = "",
-    title = "R-Squared Across Countries",
-    subtitle = paste(
-      strwrap(
-        "Each interval shows the minimum, maximum, and mean R-squared values from all OLS regressions (zeros excluded, zeros included, logged outcome) across all years (2014-2019 or 2019) and all outcome variables (grant equivalent spending, commitments). Logistic and Poisson robustness regressions were excluded.",
-        65
-      ),
-      collapse = "\n"
-    )
+    y = "" # ,
+    # title = "R-Squared Across Countries",
+    # subtitle = paste(
+    #   strwrap(
+    #     "Each interval shows the minimum, maximum, and mean R-squared values from all OLS regressions (zeros excluded, zeros included, logged outcome) across all years (2014-2019 or 2019) and all outcome variables (grant equivalent spending, commitments). Logistic and Poisson robustness regressions were excluded.",
+    #     65
+    #   ),
+    #   collapse = "\n"
+    # )
   ) +
   # facet_grid(donor ~., scales = "free") +
   theme(
@@ -785,24 +783,25 @@ plot_nice <- ggplot() +
     legend.key.size = unit(0.1, 'lines')
   ) +
   guides(colour = guide_legend(ncol = 1)) +
+  scale_color_manual(values = c("#00677F", "#696158", "#DC4405", "#ACA39A")) + 
   # scale_x_continuous(breaks = pretty_breaks(5))+
-  scale_color_discrete(
-    limits = c(
-      "GDP per capita, Population",
-      "GDP per capita, Population, Refugee In/Outflows",
-      "GDP per capita, Population, Refugee In/Outflows, Governance Scores",
-      "Full regression (distance, colony, exports)"
-    )
-  ) + 
+  # scale_color_discrete(
+  #   limits = c(
+  #     "GDP per capita, Population",
+  #     "GDP per capita, Population, Refugee In/Outflows",
+  #     "GDP per capita, Population, Refugee In/Outflows, Governance Scores",
+  #     "Full regression (distance, colony, exports)"
+  #   )
+  # ) + 
   scale_x_continuous(limits = c(0,1))
 
 ggsave(
-  paste0("all dac regression plot whisker.png"),
+  paste0("all dac regression plot whisker.pdf"),
   plot_nice,
   width = 5,
-  height = 7,
-  limitsize = FALSE,
-  dpi = 320
+  height = 7 #,
+  # limitsize = FALSE,
+  # dpi = 320
 )
 
 graph_some_df <- function(some_df, var_, file_ = "") {
@@ -907,7 +906,7 @@ graph_some_df <- function(some_df, var_, file_ = "") {
 
 graph_some_df(rsl, "R-squared")
 
-for (file_ in c("total_regressions59.txt", "pov_regressions59.txt")) {
+for (file_ in c("total_regressions72.txt", "pov_regressions72.txt")) {
   sally <- fread(file_)
   if (file_ == "pov_regressions59.txt") {
     reg_type <- "Poverty headcount Regression"
@@ -1009,3 +1008,48 @@ for (file_ in c("total_regressions59.txt", "pov_regressions59.txt")) {
 # ses <- rbindlist(list.se, fill = TRUE, idcol = "variable")
 # ses[,se.div.est:=se/estimate]
 # ses[donor=="ALL DAC",][order(abs(se.div.est))]
+
+# rotated tables ----------------------------------------------------
+
+for (regr_ in c("total_regressions72", "pov_regressions72")) {
+      rt <- fread(paste0(regr_, ".txt")) %>% as.data.frame() %>% t()
+      rt_head <- rt[1:2, ] %>% t()
+      rt_bot <- rt[3:nrow(rt), ] %>% as.data.table()
+      rt_bot[grepl("usd_commitment", V2), outcome := "usd_commitment"]
+      rt_bot[grepl("usd_grantequiv", V2), outcome := "usd_grantequiv"]
+      rt_bot[grepl("Logistic", V2), method := "Logistic"]
+      rt_bot[grepl("OLS", V2), method := "OLS"]
+      rt_bot[grepl("OLS ln", V2), method := "OLS ln"]
+      rt_bot[grepl("OLS positive", V2), method := "OLS positive"]
+      rt_bot[grepl("Poisson positive", V2), method := "Poisson positive"]
+      rt_bot[grepl("2019", V2), year := "2019"]
+      rt_bot[grepl("2014", V2), year := "2014-19"]
+      rt_bot[, iso3c := str_extract(V2, "[^_]+")]
+      rt_bot <- rt_bot[outcome == "usd_grantequiv" &
+                         method == "OLS" &
+                         year == "2019", ]
+      rt_bot <- rt_bot %>% as.data.frame() %>% t()
+      rt_bot_country <- rt_bot[rownames(rt_bot) == "iso3c", ]
+      rt_bot_country <- c("", "", rt_bot_country)
+      rt_bot <- rt_bot[1:(nrow(rt_bot) - 4), ]
+      rt <- cbind(rt_head, rt_bot)
+      rt <- rbind(rt_bot_country, rt)
+      rt <- rt[c(1, 5:nrow(rt)), ]
+      rt_bot <- rt[(nrow(rt) - 1):nrow(rt),]
+      rt <-
+        rt[(apply(rt, 1, function(x)
+          sum(x == ""))) < (ncol(rt)-3), ] %>% as.data.table()
+      rt[V2 == "", V2 := V1]
+      rt <- as.data.frame(rt)
+      rt <- rbind(rt, rt_bot) %>% as.data.frame()
+      rt <- rt[!grepl("omitted", rt$V2), ]
+      rt <- rt[, -1]
+      names(rt) <- c("labels",unlist(rt[1,][-1]))
+      rt[1,] <- rt[1,] %>% gsub("All DAC", "1 All DAC",.) %>% 
+        gsub("Top ten DAC", "1 Top ten DAC",.)
+      rt[1,1] <- "0"
+      rt <- rt[,unlist(order(rt[1,]))]
+      rt[1,] <- rt[1,] %>% gsub("[0-9]","",.)
+      rt %>% write.table(., file = paste0(regr_, "_formatted_table.txt"), 
+                  sep = "\t", row.names = FALSE, col.names = FALSE)
+}
